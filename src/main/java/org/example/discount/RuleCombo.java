@@ -3,37 +3,72 @@ package org.example.discount;
 import org.example.model.Order;
 import org.example.model.OrderItem;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class RuleCombo implements DiscountRule
-{
+public class RuleCombo implements DiscountRule {
     private final Map<Set<String>, Float> combos;
 
-    public RuleCombo(Map<List<String>, Float> combosConfig)
-    {
+    public RuleCombo(Map<List<String>, Float> combosConfig) {
         this.combos = combosConfig.entrySet().stream()
                 .collect(Collectors.toMap(
-                        e -> e.getKey().stream().map(String::toLowerCase).collect(Collectors.toSet()),
+                        e -> e.getKey().stream()
+                                .map(String::toLowerCase)
+                                .collect(Collectors.toSet()),
                         Map.Entry::getValue
                 ));
     }
 
     @Override
-    public DiscountResult apply(Order order)
-    {
-        Set<String> present = order.getItems().stream()
-                .map(it -> it.getProduct().getName().toLowerCase())
-                .collect(Collectors.toSet());
-        for (Map.Entry<Set<String>, Float> combo : combos.entrySet())
+    public DiscountResult apply(Order order) {
+        float totalDiscount = 0f;
+        StringBuilder description = new StringBuilder();
+
+        for (Set<String> combo : combos.keySet())
         {
-            if (present.containsAll(combo.getKey()))
+            Map<String, Integer> comboItemsCount = new HashMap<>();
+            for (String item : combo)
             {
-                return new DiscountResult(combo.getValue(), "Combo discount for " + combo.getKey());
+                for (OrderItem it : order.getItems())
+                {
+                    if (it.getProduct().getName().equalsIgnoreCase(item))
+                    {
+                        comboItemsCount.put(item, it.getQuantity());
+                    }
+                }
+            }
+
+            if (comboItemsCount.size() < combo.size())
+            {
+                continue;
+            }
+
+            int smallest = Integer.MAX_VALUE;
+            for (int q : comboItemsCount.values())
+            {
+                if (q < smallest)
+                {
+                    smallest = q;
+                }
+            }
+
+            if (smallest > 0)
+            {
+                float comboDiscount = combos.get(combo) * smallest;
+                totalDiscount += comboDiscount;
+                description.append("Combo discount for ")
+                        .append(combo)
+                        .append(" x")
+                        .append(smallest)
+                        .append(" = ")
+                        .append(comboDiscount)
+                        .append("; ");
             }
         }
-        return DiscountResult.NONE;
+
+        return new DiscountResult(totalDiscount, description.toString());
     }
 }
